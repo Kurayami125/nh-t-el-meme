@@ -10,6 +10,10 @@ app.use(cors());
 const PORT = process.env.PORT || 3000;
 const TEMPLATE = path.join(__dirname, "template.jpg");
 
+// ========================================
+// HOME
+// ========================================
+
 app.get("/", (req, res) => {
     res.json({
         success: true,
@@ -17,80 +21,48 @@ app.get("/", (req, res) => {
     });
 });
 
-app.get("/meme", async (req, res) => {
+// ========================================
+// FONT TEST
+// ========================================
+
+app.get("/test", (req, res) => {
 
     try {
 
-        const text = String(req.query.text || "TEST TEXT");
-
-        console.log("TEXT:", text);
-
-        const image = await loadImage(TEMPLATE);
-
-        console.log(
-            "Template:",
-            image.width,
-            "x",
-            image.height
-        );
-
-        const canvas = createCanvas(
-            image.width,
-            image.height
-        );
-
+        const canvas = createCanvas(1536, 806);
         const ctx = canvas.getContext("2d");
 
-        // Template
-        ctx.drawImage(
-            image,
+        // Background
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(
             0,
             0,
-            image.width,
-            image.height
+            1536,
+            806
         );
 
-        // =========================
-        // TEST TEXT
-        // =========================
-
-        ctx.font = "bold 70px Arial";
-        ctx.fillStyle = "white";
+        // BIG TEST TEXT
+        ctx.font = "bold 100px Arial";
+        ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
-        // Cố tình đặt giữa vùng bên phải
         ctx.fillText(
-            text,
-            1120,
+            "HELLO",
+            768,
             350
         );
 
-        // =========================
-        // AUTHOR
-        // =========================
-
-        ctx.font = "italic 35px Arial";
+        ctx.font = "bold 50px Arial";
 
         ctx.fillText(
-            "- NhậtEL",
-            1120,
-            600
+            "NHATEL",
+            768,
+            500
         );
 
-        ctx.font = "24px Arial";
-
-        ctx.fillText(
-            "@nhatel",
-            1120,
-            640
-        );
-
-        // =========================
-        // OUTPUT
-        // =========================
-
-        const buffer = canvas.toBuffer("image/png");
+        const buffer =
+            canvas.toBuffer("image/png");
 
         res.setHeader(
             "Content-Type",
@@ -101,7 +73,161 @@ app.get("/meme", async (req, res) => {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "TEST ERROR:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ========================================
+// MEME
+// ========================================
+
+app.get("/meme", async (req, res) => {
+
+    try {
+
+        const text =
+            String(req.query.text || "HELLO");
+
+        console.log("TEXT:", text);
+
+        const image =
+            await loadImage(TEMPLATE);
+
+        console.log(
+            "Template:",
+            image.width,
+            "x",
+            image.height
+        );
+
+        const canvas =
+            createCanvas(
+                image.width,
+                image.height
+            );
+
+        const ctx =
+            canvas.getContext("2d");
+
+        // ==================================
+        // DRAW TEMPLATE
+        // ==================================
+
+        ctx.drawImage(
+            image,
+            0,
+            0
+        );
+
+        // ==================================
+        // TEXT
+        // ==================================
+
+        ctx.font =
+            "bold 60px Arial";
+
+        ctx.fillStyle =
+            "#FFFFFF";
+
+        ctx.textAlign =
+            "center";
+
+        ctx.textBaseline =
+            "middle";
+
+        // Vùng phải
+        const centerX = 1120;
+        const centerY = 350;
+
+        // Viền đen nhẹ để chữ dễ nhìn
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#000000";
+
+        ctx.strokeText(
+            text,
+            centerX,
+            centerY
+        );
+
+        ctx.fillText(
+            text,
+            centerX,
+            centerY
+        );
+
+        // ==================================
+        // AUTHOR
+        // ==================================
+
+        ctx.font =
+            "italic 35px Arial";
+
+        ctx.strokeText(
+            "- NhậtEL",
+            centerX,
+            600
+        );
+
+        ctx.fillText(
+            "- NhậtEL",
+            centerX,
+            600
+        );
+
+        ctx.font =
+            "24px Arial";
+
+        ctx.strokeText(
+            "@nhatel",
+            centerX,
+            640
+        );
+
+        ctx.fillText(
+            "@nhatel",
+            centerX,
+            640
+        );
+
+        // ==================================
+        // OUTPUT
+        // ==================================
+
+        const buffer =
+            canvas.toBuffer("image/png");
+
+        console.log(
+            "Generated image:",
+            buffer.length,
+            "bytes"
+        );
+
+        res.setHeader(
+            "Content-Type",
+            "image/png"
+        );
+
+        res.setHeader(
+            "Cache-Control",
+            "no-cache, no-store, must-revalidate"
+        );
+
+        res.send(buffer);
+
+    } catch (error) {
+
+        console.error(
+            "MEME ERROR:",
+            error
+        );
 
         res.status(500).json({
             success: false,
@@ -112,8 +238,14 @@ app.get("/meme", async (req, res) => {
 
 });
 
+// ========================================
+// START
+// ========================================
+
 app.listen(PORT, () => {
+
     console.log(
         `Server running on port ${PORT}`
     );
+
 });
