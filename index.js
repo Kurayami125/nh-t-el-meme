@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { createCanvas, loadImage, registerFont } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 const path = require("path");
 
 const app = express();
@@ -9,85 +9,87 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3000;
 
-// ===============================
+// ==============================
+// TEMPLATE
+// ==============================
+
+const TEMPLATE_PATH = path.join(__dirname, "template.jpg");
+
+// ==============================
 // CONFIG
-// ===============================
+// ==============================
 
-const TEMPLATE = path.join(__dirname, "template.jpg");
+const IMAGE_WIDTH = 1536;
+const IMAGE_HEIGHT = 806;
 
-// Khu vực text bên phải
-const TEXT_AREA = {
-    x: 690,
-    y: 150,
-    width: 780,
-    height: 480
-};
+// Khu vực chữ bên phải
+const TEXT_X = 700;
+const TEXT_WIDTH = 800;
+
+// Vùng chính để đặt câu quote
+const QUOTE_TOP = 150;
+const QUOTE_HEIGHT = 400;
 
 // Font
-const FONT_NAME = "Arial";
-
-// Kích thước chữ
 const FONT_SIZE = 58;
-
-// Khoảng cách giữa các dòng
 const LINE_HEIGHT = 1.35;
 
-// ===============================
+// ==============================
 // HOME
-// ===============================
+// ==============================
 
 app.get("/", (req, res) => {
     res.json({
         success: true,
         message: "NhậtEL Meme API Online",
-        usage: "/meme?text=Your%20text%20here"
+        usage: "/meme?text=Hello%20World"
     });
 });
 
-// ===============================
+// ==============================
 // TEXT WRAP
-// ===============================
+// ==============================
 
 function wrapText(ctx, text, maxWidth) {
 
     const words = text.split(/\s+/);
     const lines = [];
 
-    let currentLine = "";
+    let line = "";
 
     for (const word of words) {
 
-        const testLine =
-            currentLine.length === 0
+        const test =
+            line === ""
                 ? word
-                : currentLine + " " + word;
+                : line + " " + word;
 
-        const width = ctx.measureText(testLine).width;
+        const width = ctx.measureText(test).width;
 
         if (width <= maxWidth) {
 
-            currentLine = testLine;
+            line = test;
 
         } else {
 
-            if (currentLine.length > 0) {
-                lines.push(currentLine);
+            if (line !== "") {
+                lines.push(line);
             }
 
-            currentLine = word;
+            line = word;
         }
     }
 
-    if (currentLine.length > 0) {
-        lines.push(currentLine);
+    if (line !== "") {
+        lines.push(line);
     }
 
     return lines;
 }
 
-// ===============================
-// MEME API
-// ===============================
+// ==============================
+// MEME
+// ==============================
 
 app.get("/meme", async (req, res) => {
 
@@ -95,33 +97,44 @@ app.get("/meme", async (req, res) => {
 
         let text = req.query.text;
 
-        // Không có text
+        // ==========================
+        // CHECK TEXT
+        // ==========================
+
         if (!text) {
+
             return res.status(400).json({
                 success: false,
-                error: "Missing text parameter.",
-                usage: "/meme?text=Hello%20world"
+                error: "Missing text.",
+                usage: "/meme?text=Hello%20World"
             });
+
         }
 
-        // Decode
         text = String(text).trim();
 
-        // Giới hạn ký tự
         if (text.length > 180) {
+
             return res.status(400).json({
                 success: false,
-                error: "Text is too long. Maximum 180 characters."
+                error: "Text must be 180 characters or less."
             });
+
         }
 
-        // Load template
-        const image = await loadImage(TEMPLATE);
+        // ==========================
+        // LOAD TEMPLATE
+        // ==========================
 
-        // Canvas cùng kích thước template
+        const image = await loadImage(TEMPLATE_PATH);
+
+        // ==========================
+        // CANVAS
+        // ==========================
+
         const canvas = createCanvas(
-            image.width,
-            image.height
+            IMAGE_WIDTH,
+            IMAGE_HEIGHT
         );
 
         const ctx = canvas.getContext("2d");
@@ -131,37 +144,45 @@ app.get("/meme", async (req, res) => {
             image,
             0,
             0,
-            image.width,
-            image.height
+            IMAGE_WIDTH,
+            IMAGE_HEIGHT
         );
 
-        // ===============================
+        // ==========================
         // MAIN TEXT
-        // ===============================
+        // ==========================
 
-        ctx.font = `normal ${FONT_SIZE}px ${FONT_NAME}`;
+        ctx.font = `${FONT_SIZE}px Arial`;
+
         ctx.fillStyle = "#ffffff";
+
         ctx.textAlign = "center";
+
         ctx.textBaseline = "middle";
 
-        // Wrap
+        // Wrap text
         const lines = wrapText(
             ctx,
             text,
-            TEXT_AREA.width
+            TEXT_WIDTH
         );
 
         const lineHeight =
             FONT_SIZE * LINE_HEIGHT;
 
-        // Tính tổng chiều cao
         const totalHeight =
             lines.length * lineHeight;
 
-        // Căn giữa theo chiều dọc
-        let startY =
-            TEXT_AREA.y +
-            (TEXT_AREA.height - totalHeight) / 2 +
+        // Tâm vùng quote
+        const centerX =
+            TEXT_X + TEXT_WIDTH / 2;
+
+        const centerY =
+            QUOTE_TOP + QUOTE_HEIGHT / 2;
+
+        let y =
+            centerY -
+            totalHeight / 2 +
             lineHeight / 2;
 
         // Vẽ từng dòng
@@ -169,41 +190,44 @@ app.get("/meme", async (req, res) => {
 
             ctx.fillText(
                 line,
-                TEXT_AREA.x + TEXT_AREA.width / 2,
-                startY
+                centerX,
+                y
             );
 
-            startY += lineHeight;
+            y += lineHeight;
         }
 
-        // ===============================
+        // ==========================
         // AUTHOR
-        // ===============================
+        // ==========================
 
         ctx.textAlign = "center";
 
-        // - NhậtEL
-        ctx.font = `italic 34px ${FONT_NAME}`;
         ctx.fillStyle = "#ffffff";
+
+        // - NhậtEL
+        ctx.font = "italic 34px Arial";
 
         ctx.fillText(
             "- NhậtEL",
-            TEXT_AREA.x + TEXT_AREA.width / 2,
-            605
+            centerX,
+            625
         );
 
         // @nhatel
-        ctx.font = `normal 23px ${FONT_NAME}`;
+        ctx.font = "23px Arial";
 
         ctx.fillText(
             "@nhatel",
-            TEXT_AREA.x + TEXT_AREA.width / 2,
-            645
+            centerX,
+            662
         );
 
-        // ===============================
-        // OUTPUT
-        // ===============================
+        // ==========================
+        // SEND IMAGE
+        // ==========================
+
+        const buffer = canvas.toBuffer("image/png");
 
         res.setHeader(
             "Content-Type",
@@ -211,33 +235,37 @@ app.get("/meme", async (req, res) => {
         );
 
         res.setHeader(
-            "Cache-Control",
-            "no-cache"
+            "Content-Length",
+            buffer.length
         );
-
-        const buffer = canvas.toBuffer("image/png");
 
         res.send(buffer);
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Meme generation error:",
+            error
+        );
 
         res.status(500).json({
             success: false,
-            error: "Failed to generate meme."
+            error: "Failed to generate meme.",
+            details: error.message
         });
+
     }
+
 });
 
-// ===============================
+// ==============================
 // START SERVER
-// ===============================
+// ==============================
 
 app.listen(PORT, () => {
 
     console.log(
-        `Meme API running on port ${PORT}`
+        `NhậtEL Meme API running on port ${PORT}`
     );
 
-}); 
+});
