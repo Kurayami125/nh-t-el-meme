@@ -1,7 +1,7 @@
 {
   "name": "nhatel-meme-api",
   "version": "1.0.0",
-  "description": "Simple meme text-to-image API",
+  "description": "NhậtEL Meme API",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -11,4 +11,4 @@
     "cors": "^2.8.5",
     "express": "^4.21.2"
   }
-} 
+}
