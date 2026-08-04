@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { createCanvas, loadImage } = require("canvas");
+const sharp = require("sharp");
 const path = require("path");
 
 const app = express();
@@ -8,7 +8,11 @@ const app = express();
 app.use(cors());
 
 const PORT = process.env.PORT || 3000;
+
 const TEMPLATE = path.join(__dirname, "template.jpg");
+
+const WIDTH = 1536;
+const HEIGHT = 806;
 
 // ========================================
 // HOME
@@ -17,202 +21,253 @@ const TEMPLATE = path.join(__dirname, "template.jpg");
 app.get("/", (req, res) => {
     res.json({
         success: true,
-        message: "NhậtEL Meme API Online"
+        message: "NhậtEL Meme API Online",
+        usage: "/meme?text=Hello%20World"
     });
 });
 
 // ========================================
-// FONT TEST
+// ESCAPE XML
 // ========================================
 
-app.get("/test", (req, res) => {
+function escapeXml(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+}
 
-    try {
+// ========================================
+// WRAP TEXT
+// ========================================
 
-        const canvas = createCanvas(1536, 806);
-        const ctx = canvas.getContext("2d");
+function wrapText(text, maxChars = 24) {
 
-        // Background
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(
-            0,
-            0,
-            1536,
-            806
-        );
+    const words = text.split(/\s+/);
 
-        // BIG TEST TEXT
-        ctx.font = "bold 100px Arial";
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+    const lines = [];
+    let current = "";
 
-        ctx.fillText(
-            "HELLO",
-            768,
-            350
-        );
+    for (const word of words) {
 
-        ctx.font = "bold 50px Arial";
+        const test =
+            current.length === 0
+                ? word
+                : current + " " + word;
 
-        ctx.fillText(
-            "NHATEL",
-            768,
-            500
-        );
+        if (test.length <= maxChars) {
 
-        const buffer =
-            canvas.toBuffer("image/png");
+            current = test;
 
-        res.setHeader(
-            "Content-Type",
-            "image/png"
-        );
+        } else {
 
-        res.send(buffer);
+            if (current.length > 0) {
+                lines.push(current);
+            }
 
-    } catch (error) {
+            // Nếu một từ quá dài
+            if (word.length > maxChars) {
 
-        console.error(
-            "TEST ERROR:",
-            error
-        );
+                let remaining = word;
 
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+                while (remaining.length > maxChars) {
+
+                    lines.push(
+                        remaining.substring(0, maxChars)
+                    );
+
+                    remaining =
+                        remaining.substring(maxChars);
+                }
+
+                current = remaining;
+
+            } else {
+
+                current = word;
+            }
+        }
     }
-});
+
+    if (current.length > 0) {
+        lines.push(current);
+    }
+
+    return lines;
+}
 
 // ========================================
-// MEME
+// CREATE SVG TEXT
+// ========================================
+
+function createTextSvg(text) {
+
+    const lines = wrapText(text, 24);
+
+    // Khu vực bên phải
+    const centerX = 1120;
+
+    // Vị trí quote
+    const centerY = 350;
+
+    const fontSize = 58;
+    const lineHeight = 78;
+
+    const totalHeight =
+        lines.length * lineHeight;
+
+    let startY =
+        centerY -
+        totalHeight / 2 +
+        lineHeight / 2;
+
+    let quoteText = "";
+
+    for (const line of lines) {
+
+        quoteText += `
+            <text
+                x="${centerX}"
+                y="${startY}"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                font-family="Arial, sans-serif"
+                font-size="${fontSize}px"
+                font-weight="bold"
+                fill="white"
+                stroke="black"
+                stroke-width="3"
+                paint-order="stroke"
+            >${escapeXml(line)}</text>
+        `;
+
+        startY += lineHeight;
+    }
+
+    // Author
+    quoteText += `
+        <text
+            x="${centerX}"
+            y="610"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            font-family="Arial, sans-serif"
+            font-size="34px"
+            font-style="italic"
+            fill="white"
+            stroke="black"
+            stroke-width="2"
+            paint-order="stroke"
+        >- NhậtEL</text>
+
+        <text
+            x="${centerX}"
+            y="650"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            font-family="Arial, sans-serif"
+            font-size="23px"
+            fill="white"
+            stroke="black"
+            stroke-width="1.5"
+            paint-order="stroke"
+        >@nhatel</text>
+    `;
+
+    return `
+        <svg
+            width="${WIDTH}"
+            height="${HEIGHT}"
+            xmlns="http://www.w3.org/2000/svg"
+        >
+            ${quoteText}
+        </svg>
+    `;
+}
+
+// ========================================
+// MEME API
 // ========================================
 
 app.get("/meme", async (req, res) => {
 
     try {
 
-        const text =
-            String(req.query.text || "HELLO");
+        let text = req.query.text;
 
-        console.log("TEXT:", text);
+        // Không có text
+        if (!text) {
 
-        const image =
-            await loadImage(TEMPLATE);
+            return res.status(400).json({
+                success: false,
+                error: "Missing text parameter.",
+                usage: "/meme?text=Hello%20World"
+            });
 
-        console.log(
-            "Template:",
-            image.width,
-            "x",
-            image.height
-        );
+        }
 
-        const canvas =
-            createCanvas(
-                image.width,
-                image.height
-            );
+        text = String(text).trim();
 
-        const ctx =
-            canvas.getContext("2d");
+        // Giới hạn
+        if (text.length > 180) {
 
-        // ==================================
-        // DRAW TEMPLATE
-        // ==================================
+            return res.status(400).json({
+                success: false,
+                error: "Text is too long. Maximum 180 characters."
+            });
 
-        ctx.drawImage(
-            image,
-            0,
-            0
-        );
-
-        // ==================================
-        // TEXT
-        // ==================================
-
-        ctx.font =
-            "bold 60px Arial";
-
-        ctx.fillStyle =
-            "#FFFFFF";
-
-        ctx.textAlign =
-            "center";
-
-        ctx.textBaseline =
-            "middle";
-
-        // Vùng phải
-        const centerX = 1120;
-        const centerY = 350;
-
-        // Viền đen nhẹ để chữ dễ nhìn
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = "#000000";
-
-        ctx.strokeText(
-            text,
-            centerX,
-            centerY
-        );
-
-        ctx.fillText(
-            text,
-            centerX,
-            centerY
-        );
-
-        // ==================================
-        // AUTHOR
-        // ==================================
-
-        ctx.font =
-            "italic 35px Arial";
-
-        ctx.strokeText(
-            "- NhậtEL",
-            centerX,
-            600
-        );
-
-        ctx.fillText(
-            "- NhậtEL",
-            centerX,
-            600
-        );
-
-        ctx.font =
-            "24px Arial";
-
-        ctx.strokeText(
-            "@nhatel",
-            centerX,
-            640
-        );
-
-        ctx.fillText(
-            "@nhatel",
-            centerX,
-            640
-        );
-
-        // ==================================
-        // OUTPUT
-        // ==================================
-
-        const buffer =
-            canvas.toBuffer("image/png");
+        }
 
         console.log(
-            "Generated image:",
-            buffer.length,
+            "Generating meme:",
+            text
+        );
+
+        // ==================================
+        // SVG
+        // ==================================
+
+        const svg = createTextSvg(text);
+
+        const svgBuffer =
+            Buffer.from(svg);
+
+        // ==================================
+        // TEMPLATE + SVG
+        // ==================================
+
+        const output = await sharp(TEMPLATE)
+            .resize(WIDTH, HEIGHT)
+            .composite([
+                {
+                    input: svgBuffer,
+                    top: 0,
+                    left: 0
+                }
+            ])
+            .png()
+            .toBuffer();
+
+        console.log(
+            "Generated:",
+            output.length,
             "bytes"
         );
+
+        // ==================================
+        // SEND
+        // ==================================
 
         res.setHeader(
             "Content-Type",
             "image/png"
+        );
+
+        res.setHeader(
+            "Content-Length",
+            output.length
         );
 
         res.setHeader(
@@ -220,12 +275,12 @@ app.get("/meme", async (req, res) => {
             "no-cache, no-store, must-revalidate"
         );
 
-        res.send(buffer);
+        res.send(output);
 
     } catch (error) {
 
         console.error(
-            "MEME ERROR:",
+            "Meme error:",
             error
         );
 
@@ -245,7 +300,7 @@ app.get("/meme", async (req, res) => {
 app.listen(PORT, () => {
 
     console.log(
-        `Server running on port ${PORT}`
+        `NhậtEL Meme API running on port ${PORT}`
     );
 
-});
+}); 
