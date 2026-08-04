@@ -8,6 +8,7 @@ const app = express();
 app.use(cors());
 
 const PORT = process.env.PORT || 3000;
+
 const TEMPLATE = path.join(__dirname, "template.jpg");
 
 const WIDTH = 1536;
@@ -26,7 +27,7 @@ app.get("/", (req, res) => {
 });
 
 // ========================================
-// XML ESCAPE
+// ESCAPE XML
 // ========================================
 
 function escapeXml(text) {
@@ -42,7 +43,7 @@ function escapeXml(text) {
 // TEXT WRAP
 // ========================================
 
-function wrapText(text, maxWidth, fontSize) {
+function wrapText(text) {
 
     const words = text.split(/\s+/);
 
@@ -50,22 +51,8 @@ function wrapText(text, maxWidth, fontSize) {
 
     let current = "";
 
-    /*
-     * Ước lượng độ rộng chữ.
-     * Không dùng Canvas nên dùng hệ số tương đối
-     * để SVG vẫn hoạt động ổn định trên Render.
-     */
-
-    const averageCharWidth =
-        fontSize * 0.56;
-
-    const maxCharacters =
-        Math.max(
-            1,
-            Math.floor(
-                maxWidth / averageCharWidth
-            )
-        );
+    // Độ rộng tối đa của một dòng
+    const maxCharacters = 24;
 
     for (const word of words) {
 
@@ -84,35 +71,7 @@ function wrapText(text, maxWidth, fontSize) {
                 lines.push(current);
             }
 
-            // Xử lý từ quá dài
-            if (word.length > maxCharacters) {
-
-                let remaining = word;
-
-                while (
-                    remaining.length >
-                    maxCharacters
-                ) {
-
-                    lines.push(
-                        remaining.substring(
-                            0,
-                            maxCharacters
-                        )
-                    );
-
-                    remaining =
-                        remaining.substring(
-                            maxCharacters
-                        );
-                }
-
-                current = remaining;
-
-            } else {
-
-                current = word;
-            }
+            current = word;
         }
     }
 
@@ -130,46 +89,52 @@ function wrapText(text, maxWidth, fontSize) {
 function createSvg(text) {
 
     // ====================================
-    // TEXT CONFIG
+    // MAIN TEXT CONFIG
     // ====================================
 
+    // Tâm phần bên phải
     const centerX = 1120;
 
-    const textAreaTop = 120;
-    const textAreaBottom = 540;
+    // Vùng chữ
+    const top = 190;
+    const bottom = 470;
 
-    const textAreaHeight =
-        textAreaBottom - textAreaTop;
+    const areaHeight =
+        bottom - top;
 
+    // Font chính
     const fontSize = 58;
 
-    const lineHeight = 72;
+    // Khoảng cách dòng
+    const lineHeight = 76;
 
-    const maxWidth = 720;
+    // ====================================
+    // UPPERCASE
+    // ====================================
+
+    const upperText =
+        text.toLocaleUpperCase("vi-VN");
 
     // ====================================
     // WRAP
     // ====================================
 
-    const lines = wrapText(
-        text,
-        maxWidth,
-        fontSize
-    );
+    const lines =
+        wrapText(upperText);
 
     // ====================================
-    // VERTICAL CENTER
+    // CENTER VERTICAL
     // ====================================
 
     const totalHeight =
         lines.length * lineHeight;
 
     let startY =
-        textAreaTop +
-        (textAreaHeight - totalHeight) / 2 +
+        top +
+        (areaHeight - totalHeight) / 2 +
         lineHeight / 2;
 
-    let textElements = "";
+    let elements = "";
 
     // ====================================
     // MAIN TEXT
@@ -177,18 +142,7 @@ function createSvg(text) {
 
     for (const line of lines) {
 
-        const safeLine =
-            escapeXml(line);
-
-        /*
-         * Viền đen trước
-         * Sau đó chữ trắng nằm trên.
-         *
-         * Cách này tạo cảm giác giống
-         * chữ meme trong ảnh mẫu.
-         */
-
-        textElements += `
+        elements += `
             <text
                 x="${centerX}"
                 y="${startY}"
@@ -196,13 +150,9 @@ function createSvg(text) {
                 dominant-baseline="middle"
                 font-family="Arial, Helvetica, sans-serif"
                 font-size="${fontSize}px"
-                font-weight="700"
+                font-weight="400"
                 fill="#ffffff"
-                stroke="#000000"
-                stroke-width="5"
-                stroke-linejoin="round"
-                paint-order="stroke fill"
-            >${safeLine}</text>
+            >${escapeXml(line)}</text>
         `;
 
         startY += lineHeight;
@@ -212,21 +162,17 @@ function createSvg(text) {
     // AUTHOR
     // ====================================
 
-    textElements += `
+    elements += `
         <text
             x="${centerX}"
-            y="610"
+            y="510"
             text-anchor="middle"
             dominant-baseline="middle"
             font-family="Arial, Helvetica, sans-serif"
             font-size="34px"
+            font-weight="400"
             font-style="italic"
-            font-weight="600"
             fill="#ffffff"
-            stroke="#000000"
-            stroke-width="3"
-            stroke-linejoin="round"
-            paint-order="stroke fill"
         >- NhậtEL</text>
     `;
 
@@ -234,20 +180,16 @@ function createSvg(text) {
     // USERNAME
     // ====================================
 
-    textElements += `
+    elements += `
         <text
             x="${centerX}"
-            y="650"
+            y="552"
             text-anchor="middle"
             dominant-baseline="middle"
             font-family="Arial, Helvetica, sans-serif"
             font-size="23px"
             font-weight="400"
             fill="#ffffff"
-            stroke="#000000"
-            stroke-width="2"
-            stroke-linejoin="round"
-            paint-order="stroke fill"
         >@nhatel</text>
     `;
 
@@ -263,7 +205,7 @@ function createSvg(text) {
             viewBox="0 0 ${WIDTH} ${HEIGHT}"
         >
 
-            ${textElements}
+            ${elements}
 
         </svg>
     `;
@@ -326,18 +268,11 @@ app.get("/meme", async (req, res) => {
             Buffer.from(svg);
 
         // =================================
-        // LOAD TEMPLATE
-        // =================================
-
-        const image =
-            sharp(TEMPLATE);
-
-        // =================================
-        // COMPOSITE
+        // PROCESS IMAGE
         // =================================
 
         const output =
-            await image
+            await sharp(TEMPLATE)
                 .resize(
                     WIDTH,
                     HEIGHT,
@@ -358,7 +293,7 @@ app.get("/meme", async (req, res) => {
                 .toBuffer();
 
         console.log(
-            "Generated image:",
+            "Generated:",
             output.length,
             "bytes"
         );
@@ -388,10 +323,8 @@ app.get("/meme", async (req, res) => {
 
         res.status(500).json({
             success: false,
-            error:
-                "Failed to generate meme.",
-            details:
-                error.message
+            error: "Failed to generate meme.",
+            details: error.message
         });
 
     }
@@ -399,7 +332,7 @@ app.get("/meme", async (req, res) => {
 });
 
 // ========================================
-// START
+// START SERVER
 // ========================================
 
 app.listen(PORT, () => {
